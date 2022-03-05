@@ -12,6 +12,17 @@ import jacklib
 import nsm_client
 import ray
 
+use_jackdbus = '--jackdbus' in sys.argv
+if use_jackdbus:
+    import dbus
+    bus = dbus.SessionBus()
+    jackdbus_controller = bus.get_object('org.jackaudio.service', '/org/jackaudio/Controller')
+    jackdbus_patchbay = dbus.Interface(jackdbus_controller, 'org.jackaudio.JackPatchbay')
+    def dbus_connect(source, dest):
+        source = source.partition(':')
+        dest = dest.partition(':')
+        jackdbus_patchbay.ConnectPortsByName(source[0], source[2], dest[0], dest[2])
+
 connection_list = []
 saved_connections = []
 port_list = []
@@ -262,7 +273,10 @@ def connectAllInputs(port):
             continue
 
         if connection[0] == port.name and connection[1] in input_ports:
-            jacklib.connect(jack_client, port.name, connection[1])
+            if use_jackdbus:
+                dbus_connect(port.name, connection[1])
+            else:
+                jacklib.connect(jack_client, port.name, connection[1])
 
 def connectAllOutputs(port):
     if port.mode != PORT_MODE_INPUT:
@@ -279,7 +293,10 @@ def connectAllOutputs(port):
             continue
 
         if connection[0] in output_ports and connection[1] == port.name:
-            jacklib.connect(jack_client, connection[0], port.name)
+            if use_jackdbus:
+                dbus_connect(connection[0], port.name)
+            else:
+                jacklib.connect(jack_client, connection[0], port.name)
 
 def makeMayConnections():
     output_ports = []
@@ -312,7 +329,10 @@ def makeMayConnections():
                 pending_connection = True
                 break
 
-            jacklib.connect(jack_client, connection[0], connection[1])
+            if use_jackdbus:
+                dbus_connect(connection[0], connection[1])
+            else:
+                jacklib.connect(jack_client, connection[0], connection[1])
             one_connected = True
     else:
         pending_connection = False
